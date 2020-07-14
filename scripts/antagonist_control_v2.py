@@ -28,7 +28,7 @@ class Setup:
 def sin_traj(t):
     a0 = 0
     a = 30
-    w = 0.2
+    w = 1
     omega = 2*np.pi*w
     x0 = 43
 
@@ -61,47 +61,10 @@ def sin_traj(t):
                       [dq2]])
     return X_des
 
-def chirp_traj(t):
-    a0 = 0
-    a = 20
-    w0 = 0.0
-    nu = 0.1
-    omega = 2*np.pi*(w0 + nu*t)
-    x0 = 48
-
-    r = 0.71
-    L = 230
-
-    x = a0+a*np.sin(omega*t)
-    dx = a*(omega + 4*np.pi*nu*t)*np.cos(omega*t)
-    #ddx = -a*omega*omega*np.sin(omega*t)
-
-    x1 = x + x0
-    dx1 = dx
-    #ddx1 = ddx
-
-    q1 = np.sqrt(2*L*x1 - x1*x1)/r
-    dq1 = -(2*x1*dx1 - 2*L*dx1)/(2*r*np.sqrt(2*L*x1 - x1*x1))
-    #ddq1 = -pow(2*x1*dx1 - 2*L*dx1,2)/(4*r*pow(2*L*x1 - x1*x1,3/2)) - (2*dx1*x1 + 2*x1*ddx1 - 2*L*ddx1)/(2*r*sqrt(2*L*x1 - x1*x1))
-    
-    x2 = -x + x0
-    dx2 = -dx
-    #ddx2 = -ddx
-
-    q2 = np.sqrt(2*L*x2 - x2*x2)/r
-    dq2 = -(2*x2*dx2 - 2*L*dx2)/(2*r*np.sqrt(2*L*x2 - x2*x2))
-    #desired_state.ddpos_q2 = -pow(2*x2*dx2 - 2*L*dx2,2)/(4*r*pow(2*L*x2 - x2*x2,3/2)) - (2*dx2*x2 + 2*x2*ddx2 - 2*L*ddx2)/(2*r*sqrt(2*L*x2 - x2*x2));
-    
-    X_des = np.array([[q1],
-                      [dq1],
-                      [q2],
-                      [dq2]])
-    return X_des
-
 
 def antagonist_control(setup,X_des):
-    u_min = -5
-    u_max = 5
+    u_min = -1
+    u_max = 1
     kp = 0.1
     kd = 0.01
 
@@ -154,7 +117,7 @@ if __name__ == "__main__":
     T = 10
     N = int(T*fs)
     antagonist = Setup(1./fs)
-    data_array = np.zeros((N, 8))
+    data_array = np.zeros((N, 11))
     print(' *** DATA RECORDING *** ')
     for i in range(N):
         
@@ -162,20 +125,19 @@ if __name__ == "__main__":
         data, addr = sock.recvfrom(4*8)  # buffer size is 1024 bytes
         int_data = np.frombuffer(data, dtype=np.int32)
         antagonist.update(int_data)
-        X_des = chirp_traj((int_data[0] - data_array[0, 0])/1E6)
+        X_des = sin_traj((int_data[0] - data_array[0, 0])/1E6)
         '''X_des = np.array([[0],
                   [0],
                   [0],
                   [0]])'''
         u = antagonist_control(antagonist,X_des)
-        u_preload = 0.2
-        send_action(sock, addr, int_data[0], u[0]+u_preload, u[1]+u_preload)
+        send_action(sock, addr, int_data[0], u[0]+0.1, u[1]+0.1)
         
         
         data_array[i, 0:8] = int_data
-        '''data_array[i, 8] = antagonist.dx
+        data_array[i, 8] = antagonist.dx
         data_array[i, 9] = antagonist.dq1
-        data_array[i, 10] = antagonist.dq2'''
+        data_array[i, 10] = antagonist.dq2
 
     print('\n\n *** EXPERIMENT IS OVER ***')
 
@@ -188,18 +150,18 @@ if __name__ == "__main__":
     q1_cur = data_array[:, 5]/1E3
     q2_cur = data_array[:, 6]/1E3
     force = data_array[:, 7]/1E3
-    '''dx = data_array[:, 8]/1E3
+    dx = data_array[:, 8]/1E3
     dq1 = data_array[:, 9]/1E3
-    dq2 = data_array[:, 10]/1E3'''
+    dq2 = data_array[:, 10]/1E3
 
     np.savetxt(data_file_name+'.csv', np.transpose(data_array), delimiter=',')  # X is an array
 
     print(' Data saved to:\n' + data_file_name+'.csv\n\n')
 
     plt.plot(time[1:],lin_pos[1:],label='x')
-    #plt.plot(time[1:],dq1[1:],label='dq1')
+    plt.plot(time[1:],dq1[1:],label='dq1')
     plt.plot(time[1:],q1_pos[1:],label='q1')    
-    #plt.plot(time[1:],dq2[1:],label='dq2')
+    plt.plot(time[1:],dq2[1:],label='dq2')
     plt.plot(time[1:],q2_pos[1:],label='q2')
 
     plt.legend(loc='lower right')

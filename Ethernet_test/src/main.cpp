@@ -74,8 +74,8 @@ float sat(float x, float x_min, float x_max){
 
 void control(float u1, float u2){
 
-  float u_max = 1;
-  float u_min = -1;
+  float u_max = 5;
+  float u_min = -5;
 
   u1 = sat(u1, u_min, u_max);
   u2 = sat(u2, u_min, u_max);
@@ -128,8 +128,6 @@ int main() {
   timer.start(); // Start global system timer 
 
   while(1) {
-    Enable_m1.write(motor_enable.read());
-    Enable_m2.write(motor_enable.read());
     if((timer.read_us() - elapsed_t)>period*1000-1){
 
       // update state
@@ -171,6 +169,8 @@ int main() {
       geted_t = in_buffer[0];
       //printf("%d,%d\n",in_buffer[1],in_buffer[2]);
       if (n > 0){
+        Enable_m1.write(motor_enable.read());
+        Enable_m2.write(motor_enable.read());
         float u1 = float(in_buffer[1])/1000.;
         float u2 = float(in_buffer[2])/1000.;
         //printf("m1");
@@ -180,6 +180,8 @@ int main() {
       else{
         //printf("m2 ");
         control(0, 0);
+        Enable_m1.write(false);
+        Enable_m2.write(false);
       }
     }
   }
