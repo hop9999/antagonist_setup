@@ -35,12 +35,14 @@ const int period = 2;// in ms
 ///encoder m1
 Nucleo_Encoder_16_bits enc_m1(TIM1);
 float enc_m1_pos;
+float enc_m1_vel;
 int enc_m1_cpt = 1024;
 float enc_m1_scale = 2*3.14/(enc_m1_cpt*4);
 
 //encoder m2
 Nucleo_Encoder_16_bits enc_m2(TIM3);
 float enc_m2_pos;
+float enc_m2_vel;
 int enc_m2_cpt = 1024;
 float enc_m2_scale = 2*3.14/(enc_m2_cpt*4);
 
@@ -50,6 +52,11 @@ int enc_lin_count = 0;
 float enc_lin_pos;
 int lin_enc_cpi = 360;
 float lin_enc_scale = 25.4/(lin_enc_cpi*4);
+
+float q1_init = 0;
+float q2_init = 0;
+float prev_m1_pos = 0;
+float prev_m2_pos = 0;
 
 float min_lin_enc;
 float max_lin_enc;
@@ -99,7 +106,35 @@ void control(float u1, float u2){
   Set_m2.write(u2);
 }
 
-void calibration(){
+void calibration(float t){
+  Enable_m1.write(motor_enable.read());
+  Enable_m2.write(motor_enable.read());
+  if(t < 1){
+    control(0.2,0.2);
+  }
+  if (t > 1 && t < 4){
+    control(0,0.5);
+    q1_init = enc_m1_pos;
+    //printf("m1 1\n");
+  }
+  if (t > 4 && t < 24){
+    float q_des = 20*cos((t-4)/4 + M_PI/3) + q1_init - 20*cos(M_PI/3);
+    float u = 0.1*(q_des - enc_m1_pos);
+    control(u,0.8);
+    //printf("%f, %f\n",q_des,enc_m1_vel);
+  }
+  if (t > 24 && t < 27){
+    control(0.5,0);
+    q2_init = enc_m2_pos;
+    //printf("m2 1\n");
+  }
+  if (t > 27 && t < 47){
+    float q_des = 20*cos((t-27)/4 + M_PI/3) + q2_init - 20*cos(M_PI/3);
+    float u = 0.1*(q_des - enc_m2_pos);
+    control(0.8,u);
+    //printf("%f, %f\n",q_des,enc_m2_vel);
+  }
+
   if (enc_lin_pos < min_lin_enc){
     min_lin_enc = enc_lin_pos;
     min_m2_enc = enc_m2_pos;
@@ -120,7 +155,7 @@ int main() {
   SocketAddress rec_addr(mbedIP, out_PORT);
   UDPSocket td_sock(&eth);
   td_sock.set_blocking(false);
-  td_sock.set_timeout(period);
+  td_sock.set_timeout(period/2);
   int buffer[8]; // buffer to store output data 
 
     // put your setup code here, to run once:
@@ -136,53 +171,61 @@ int main() {
 
       long int enc_m1_count = enc_m1.GetCounter();
       enc_m1_pos = enc_m1_scale*enc_m1_count;
+      enc_m1_vel = 1000.*(enc_m1_pos - prev_m1_pos)/period;
+      prev_m1_pos = enc_m1_pos;
 
       long int enc_m2_count = enc_m2.GetCounter();
       enc_m2_pos = enc_m2_scale*enc_m2_count;
-      
+      enc_m2_vel = 1000.*(enc_m2_pos - prev_m2_pos)/period;
+      prev_m2_pos = enc_m2_pos;
+
       long int enc_lin_count = enc_lin.GetCounter();
       enc_lin_pos = lin_enc_scale*enc_lin_count;
-      
-      calibration();
 
-      float x0 = (max_lin_enc - min_lin_enc)/2;
-      float x = enc_lin_pos - min_lin_enc - x0;
-      float q1 = enc_m1_pos - min_m1_enc;
-      float q2 = enc_m2_pos - min_m2_enc;
-
-      // send information
-      buffer[0] = int(t*1E6); // elapsed time in micro seconds
-      buffer[1] = prev_t - geted_t; // actual linear position 
-      buffer[2] = x*1E3; // desired motor position 
-      buffer[3] = q1*1E3; // actual motor position
-      buffer[4] = q2*1E3; // actual linear acceleration
-      buffer[5] = ActCur_m1.read(); // desired current
-      buffer[6] = ActCur_m2.read(); // actual current
-      buffer[7] = 0; // Measured force
-      prev_t = t*1E6;
-
-      td_sock.sendto(td_addr, &buffer, sizeof(buffer)); // send buffer to chosen client
-      
-      //request information
-      int in_buffer[3];
-      int n = td_sock.recvfrom(&rec_addr, &in_buffer, sizeof(in_buffer));
-      geted_t = in_buffer[0];
-      //printf("%d,%d\n",in_buffer[1],in_buffer[2]);
-      if (n > 0){
-        Enable_m1.write(motor_enable.read());
-        Enable_m2.write(motor_enable.read());
-        float u1 = float(in_buffer[1])/1000.;
-        float u2 = float(in_buffer[2])/1000.;
-        //printf("m1");
-        //realize control
-        control(u1, u2);
+      if(t < 47) {
+        calibration(t);
       }
       else{
-        //printf("m2 ");
-        control(0, 0);
-        Enable_m1.write(false);
-        Enable_m2.write(false);
+        float x0 = (max_lin_enc - min_lin_enc)/2;
+        float x = -(enc_lin_pos - min_lin_enc - x0);
+        float q1 = enc_m1_pos - min_m1_enc;
+        float q2 = enc_m2_pos - min_m2_enc;
+
+        // send information
+        buffer[0] = int(t*1E6); // elapsed time in micro seconds
+        buffer[1] = prev_t - geted_t; // actual linear position 
+        buffer[2] = x*1E3; // desired motor position 
+        buffer[3] = q1*1E3; // actual motor position
+        buffer[4] = q2*1E3; // actual linear acceleration
+        buffer[5] = ActCur_m1.read()*1E3; // desired current
+        buffer[6] = ActCur_m2.read()*1E3; // actual current
+        buffer[7] = x0*1E3; // Measured force
+        prev_t = t*1E6;
+
+        td_sock.sendto(td_addr, &buffer, sizeof(buffer)); // send buffer to chosen client
+        
+        //request information
+        int in_buffer[3];
+        int n = td_sock.recvfrom(&rec_addr, &in_buffer, sizeof(in_buffer));
+        geted_t = in_buffer[0];
+        //printf("%d,%d\n",in_buffer[1],in_buffer[2]);
+        if (n > 0){
+          Enable_m1.write(motor_enable.read());
+          Enable_m2.write(motor_enable.read());
+          float u1 = float(in_buffer[1])/1000.;
+          float u2 = float(in_buffer[2])/1000.;
+          //printf("m1");
+          //realize control
+          control(u1, u2);
+        }
+        else{
+          //printf("m2 ");
+          control(0, 0);
+          Enable_m1.write(false);
+          Enable_m2.write(false);
+        }
       }
+      
     }
   }
 }
