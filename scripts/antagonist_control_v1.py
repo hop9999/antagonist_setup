@@ -16,7 +16,7 @@ def send_action(socket, addr, check, u1, u2):
 if __name__ == "__main__":
 
     script_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    data_path = '/home/oleg/antagonist_control/data/'
+    data_path = "C:/Users/admin/Documents/GitHub/antagonist_setup/data/"
     plots_path = os.path.join(script_dir, 'plots/')
 
     nu = 'sin'
@@ -28,47 +28,51 @@ if __name__ == "__main__":
 
     sock = socket.socket(socket.AF_INET,  # Internet
                         socket.SOCK_DGRAM)  # UDP
-
     print('\n *** CONNECTION *** \n'+
         ' Target IP: ' +UDP_IP + '\n'
         ' PORT: ' + str(UDP_PORT))
 
     sock.bind((UDP_IP, UDP_PORT))
     print(' Connected successfully \n')
-
+    sock.setblocking(0)
+    sock.settimeout(0.05)
     #trajectory
     a0 = 0
     a = 20
     w0 = 0.
-    nu = 0.05
+    nu = 0.01
     
-    fs = 500
+    fs = 200
     T = 10
     N = int(T*fs)
-    antagonist = Setup( 25, 0.71, 230, 5)
+    antagonist = Setup( 20, 0.71, 210, 5)
     data_array = np.zeros((N, 8))
     print(' *** DATA RECORDING *** ')
     for i in range(N):
-        
-        #print(" Progress: {}%".format(int(100 * (i+1) / N)), end="\r", flush=True)
-        data, addr = sock.recvfrom(4*8)  # buffer size is 1024 bytes
-        int_data = np.frombuffer(data, dtype=np.int32)
-        antagonist.update(int_data)
+        try:
+            data, addr = sock.recvfrom(4*8)
+            int_data = np.frombuffer(data, dtype=np.int32)
+            antagonist.update(int_data)
 
-        t = (int_data[0] - data_array[0, 0])/1E6
-        X_des = chirp_traj(antagonist,a0,a,w0,nu,t)
-        '''X_des = np.array([[0],
-                  [0],
-                  [0],
-                  [0],
-                  [0],
-                  [0]])'''
-        u = antagonist_control(antagonist,X_des)
-        #print(u)
-        u_preload = 0.
-        send_action(sock, addr, int_data[0], u[0]+u_preload, u[1]+u_preload)
+            t = (int_data[0] - data_array[0, 0])/1E6
+            #X_des = chirp_traj(antagonist,a0,a,w0,nu,t)
+            X_des = step_traj(antagonist,t)
+            #print(X_des)
+            '''X_des = np.array([[0],
+                    [0],
+                    [0],
+                    [0],
+                    [0],
+                    [0]])'''
+            u = antagonist_control(antagonist,X_des)
+            #print(u)
+            u_preload = 0.
+            send_action(sock, addr, int_data[0], u[0]+u_preload, u[1]+u_preload)
+            
+            data_array[i, 0:8] = int_data
+        except socket.timeout:
+            print("except")
         
-        data_array[i, 0:8] = int_data
 
     print('\n\n *** EXPERIMENT IS OVER ***')
 
@@ -86,7 +90,8 @@ if __name__ == "__main__":
 
     print(' Data saved to:\n' + data_file_name+'.csv\n\n')
 
-    traj = chirp_traj(antagonist,a0,a,w0,nu,time)
+    traj = step_traj(antagonist,time)
+    print(traj)
     x_des = traj[0,:][0]
     q1_des = traj[2,:][0]
     q2_des = traj[4,:][0]

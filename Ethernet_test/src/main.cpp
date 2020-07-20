@@ -8,7 +8,7 @@ EthernetInterface eth;
 // Static IP network variables
 const int out_PORT = 8150;
 const int PORT = 8151;
-static const char* mbedIP       = "192.168.3.3";  //IP 
+static const char* mbedIP       = "192.168.3.3";    //IP 
 static const char* mbedMask     = "255.255.255.0";  // Mask
 static const char* mbedGateway  = "192.168.3.1";    //Gateway
 static const char* recvIP = "192.168.3.2";
@@ -164,7 +164,7 @@ int main() {
 
   while(1) {
     if((timer.read_us() - elapsed_t)>period*1000-1){
-
+      printf("dsdd\n");
       // update state
       elapsed_t = timer.read_us();
       t = elapsed_t/1E6;
@@ -208,7 +208,7 @@ int main() {
         int in_buffer[3];
         int n = td_sock.recvfrom(&rec_addr, &in_buffer, sizeof(in_buffer));
         geted_t = in_buffer[0];
-        //printf("%d,%d\n",in_buffer[1],in_buffer[2]);
+        //printf("%d,%d\n",n,in_buffer[0]);
         if (n > 0){
           Enable_m1.write(motor_enable.read());
           Enable_m2.write(motor_enable.read());

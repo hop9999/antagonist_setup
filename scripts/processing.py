@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from antagonist_control import *
 
-data_array = np.genfromtxt('/home/oleg/antagonist_control/data/chirp5.csv', delimiter=',')
+data_array = np.genfromtxt('C:/Users/admin/Documents/GitHub/antagonist_setup/data/exp_sin.csv', delimiter=',')
 
 time = (data_array[0, :] - data_array[0, 0])/1E6
 
@@ -19,7 +19,7 @@ a = 20
 w0 = 0.0
 nu = 0.05
 
-traj = chirp_traj(antagonist,a0,a,w0,nu,time)
+traj = step_traj(antagonist,time)
 x_des = traj[0,:][0]
 q1_des = traj[2,:][0]
 q2_des = traj[4,:][0]
